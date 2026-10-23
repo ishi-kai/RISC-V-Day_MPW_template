@@ -40,7 +40,7 @@ lvs:
 # ======================================================
 pdk:
   repo: "https://github.com/ishi-kai/gf180mcuD.git"
-  ref:  "main"      # Branch or tag (recommended: fixed tag for reproducibility)
+  ref:  "RD_2611"   # Branch or tag (recommended: fixed tag for reproducibility)
   dir:  "libs.tech" # Rule deck location inside PDK repo
 
 # ======================================================

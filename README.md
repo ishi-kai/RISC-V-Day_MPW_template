@@ -76,6 +76,17 @@ LVS は並列デバイスをまとめて (`combine=true`) 比較するので、�
 - `lvs.netlist_only` : `true` にすると抽出のみ (比較しない)
 - `pdk.repo` / `pdk.ref` / `pdk.dir` : PDK リポジトリ / ブランチ・タグ / ルールデッキのディレクトリ
 
+### PDK のブランチ
+
+CI は `pdk.ref` で指定した ishi-kai/gf180mcuD のブランチを使います。
+
+- PDK のブランチは開催回ごとに **`RD_YYMM`** という名前で作られます
+  (`YYMM` は開催年月。例: 2026年11月は `RD_2611`、2027年4月は `RD_2704`)
+- インバータ DUT 用の `inv_dut` デッキ、密度ルールの調整などは `RD_YYMM` ブランチにだけ入っています
+- `main` ブランチには `inv_dut` デッキがないので、`main` を指定すると DRC が
+  `Unknown tag: inv_dut` で失敗します
+- `pdk.ref` には、参加する開催回の `RD_YYMM` が設定済みです。変更しないでください
+
 ---
 
 ## CI Workflow
@@ -121,8 +132,8 @@ gf180mcuD の KLayout LVS (`libs.tech/klayout/tech/lvs/gf180mcu.lvs`) で
 KLayout (0.30.9 以降) と `pyyaml`, `click` が必要です。
 
 ```bash
-# gf180mcuD を clone (CI と同じ PDK)
-git clone https://github.com/ishi-kai/gf180mcuD.git ../gf180mcuD
+# gf180mcuD の RD_YYMM ブランチを clone (CI と同じ PDK、RD_YYMM は info.yaml の pdk.ref)
+git clone -b RD_YYMM https://github.com/ishi-kai/gf180mcuD.git ../gf180mcuD
 
 # CI と同じ Pre-check / DRC / LVS を実行 (結果は run/)
 scripts/run_local.sh ../gf180mcuD
