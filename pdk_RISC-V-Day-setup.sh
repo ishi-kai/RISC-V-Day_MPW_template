@@ -1,0 +1,314 @@
+#!/bin/sh
+# ========================================================================
+# Initialization of IIC Open-Source EDA Environment for Ubuntu WSL2
+# This script is for use with GF180.
+# ========================================================================
+
+# Define setup environment
+# ------------------------
+export PDK_ROOT="$HOME/pdk"
+export TOOLS_ROOT="$HOME/tools"
+export MY_STDCELL=gf180mcu_fd_sc_mcu7t5v0
+export SRC_DIR="$HOME/src"
+my_path=$(realpath "$0")
+my_dir=$(dirname "$my_path")
+export SCRIPT_DIR="$my_dir"
+export GF_PDK_OPTION=D
+export PDK=gf180mcuD
+export CIEL_H=1689ac3f2dc763876eaf967227c7dfe831b031ae
+#export GF180D_H=WS_RUN3
+export GF180D_H=RD_2611
+
+# --------
+echo ""
+echo ">>>> Initializing..."
+echo ""
+
+# for Mac
+if [ "$(uname)" == 'Darwin' ]; then
+  VER=`sw_vers -productVersion | awk -F. '{ print $1 }'`
+  case $VER in
+    "14")
+      export MAC_OS_NAME=Sonoma
+      export CC_VERSION=-14
+      export CXX_VERSION=-14
+      ;;
+    "15")
+      export MAC_OS_NAME=Sequoia
+      export CC_VERSION=-14
+      export CXX_VERSION=-14
+      ;;
+    "26")
+      export MAC_OS_NAME=Tahoe
+      export CC_VERSION=-15
+      export CXX_VERSION=-15
+      ;;
+    *)
+      echo "Your Mac OS Version ($VER) is not supported."
+      exit 1
+      ;;
+  esac
+  export MAC_ARCH_NAME=`uname -m`
+fi
+
+# for Ubuntu
+if [ "$(expr substr $(uname -s) 1 5)" == 'Linux' ]; then
+  OS='Linux'
+  export UBUNTU_VERSION_ID=`lsb_release -r | awk -F: '{ print $2 }'`
+fi
+
+
+echo ">>>> Installing Ciel"
+if [ ! -d "$SRC_DIR/ciel" ]; then
+	git clone https://github.com/fossi-foundation/ciel "$SRC_DIR/ciel"
+	cd "$SRC_DIR/ciel" || exit
+else
+	echo ">>>> Updating ciel"
+	cd "$SRC_DIR/ciel" || exit
+	git pull
+fi
+
+if [ "$(uname)" == 'Darwin' ]; then
+  OS='Mac'
+  python3 -m pip install --upgrade --no-cache-dir ciel --break-system-packages
+elif [ "$(expr substr $(uname -s) 1 5)" == 'Linux' ]; then
+  OS='Linux'
+  sudo apt install libcurl4-openssl-dev
+  if [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '22.04' ]; then
+    python3 -m pip install --upgrade --no-cache-dir ciel
+  elif [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '24.04' ]; then
+    python3 -m pip install --upgrade --no-cache-dir ciel --break-system-packages
+  elif [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '26.04' ]; then
+    python3 -m pip install --upgrade --no-cache-dir ciel --break-system-packages
+  else
+    echo "Your platform Ubuntu $UBUNTU_VERSION_ID is not supported."
+  fi
+elif [ "$(expr substr $(uname -s) 1 10)" == 'MINGW32_NT' ]; then
+  OS='Cygwin'
+  echo "Your platform ($(uname -a)) is not supported."
+  exit 1
+else
+  echo "Your platform ($(uname -a)) is not supported."
+  exit 1
+fi
+
+
+# Copy KLayout Configurations
+# ----------------------------------
+if [ ! -d "$HOME/.klayout" ]; then
+	mkdir $HOME/.klayout
+fi
+if [ ! -d "$HOME/.klayout/libraries" ]; then
+	mkdir $HOME/.klayout/libraries
+fi
+if [ ! -d "$HOME/.klayout/d25" ]; then
+	mkdir $HOME/.klayout/d25
+fi
+if [ ! -d "$HOME/.klayout/drc" ]; then
+	mkdir $HOME/.klayout/drc
+fi
+if [ ! -d "$HOME/.klayout/lvs" ]; then
+	mkdir $HOME/.klayout/lvs
+fi
+if [ ! -d "$HOME/.klayout/macros" ]; then
+	mkdir $HOME/.klayout/macros
+fi
+if [ ! -d "$HOME/.klayout/pymacros" ]; then
+	mkdir $HOME/.klayout/pymacros
+fi
+if [ ! -d "$HOME/.klayout/python" ]; then
+	mkdir $HOME/.klayout/python
+fi
+if [ ! -d "$HOME/.klayout/tech" ]; then
+	mkdir $HOME/.klayout/tech
+fi
+
+# Delete previous PDK
+# ---------------------------------------------
+if [ -d "$PDK_ROOT" ]; then
+	echo ">>>> Delete previous PDK"
+	sudo rm -rf "$PDK_ROOT"
+fi
+sudo mkdir "$PDK_ROOT"
+sudo chown "$USER:staff" "$PDK_ROOT"
+
+
+
+# Create .spiceinit
+# -----------------
+{
+	echo "set num_threads=$(nproc)"
+	echo "set ngbehavior=hsa"
+	echo "set ng_nomodcheck"
+} > "$HOME/.spiceinit"
+
+# Create iic-init.sh
+# ------------------
+if [ ! -d "$HOME/.xschem" ]; then
+	mkdir "$HOME/.xschem"
+fi
+
+
+# Add export
+# ------------------
+if [[ "$(uname)" == 'Darwin' ]]; then
+	OS='Mac'
+	startup="$HOME/.zshrc"
+elif [[ "$(uname -s)" == Linux* ]]; then
+	OS='Linux'
+	startup="$HOME/.bashrc"
+elif [[ "$(uname -s)" == MINGW32_NT* ]]; then
+	OS='Cygwin'
+	echo "Your platform ($(uname -a)) is not supported."
+	exit 1
+else
+	echo "Your platform ($(uname -a)) is not supported."
+	exit 1
+fi
+
+tail -1 "$startup" | grep -qxF 'source $HOME/current_pdk' - || \
+    echo 'source $HOME/current_pdk' >> "$startup"
+
+cat > "$HOME/current_pdk" <<EOF
+export PDK_ROOT="$PDK_ROOT"
+export PDK="$PDK"
+export GF_PDK_OPTION="$GF_PDK_OPTION"
+export STD_CELL_LIBRARY="$MY_STDCELL"
+EOF
+if [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '24.04' ]; then
+  echo "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR 2>/dev/null" >> $HOME/current_pdk
+elif [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '26.04' ]; then
+  echo "systemctl --user import-environment DISPLAY WAYLAND_DISPLAY XDG_RUNTIME_DIR 2>/dev/null" >> $HOME/current_pdk
+fi
+source "$HOME/current_pdk"
+
+
+# Fix packages version for PDK
+# -----------------------------------
+echo ">>>> Installing python packages for PDK"
+if [ "$(uname)" == 'Darwin' ]; then
+  OS='Mac'
+  python3 -m pip install gdsfactory==9.51.0 --break-system-packages
+  python3 -m pip install gds2palace==0.5.2 --break-system-packages
+  python3 -m pip install gds_prepare_for_EM==1.2.0 --break-system-packages
+  python3 -m pip install kfactory==3.0.4 --break-system-packages
+  python3 -m pip install klayout-pex==0.4.4 --break-system-packages
+  python3 -m pip install klayout-vector-file-export-cli==0.5 --break-system-packages
+elif [ "$(expr substr $(uname -s) 1 5)" == 'Linux' ]; then
+  OS='Linux'
+  if [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '22.04' ]; then
+    pip install gdsfactory==9.51.0
+    pip install gds2palace==0.5.2
+    pip install gds_prepare_for_EM==1.2.0
+    pip install kfactory==3.0.4
+    pip install klayout-pex==0.4.4
+    pip install klayout-vector-file-export-cli==0.5
+  elif [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '24.04' ]; then
+    python3 -m pip install gdsfactory==9.51.0 --break-system-packages
+    python3 -m pip install gds2palace==0.5.2 --break-system-packages
+    python3 -m pip install gds_prepare_for_EM==1.2.0 --break-system-packages
+    python3 -m pip install kfactory==3.0.4 --break-system-packages
+    python3 -m pip install klayout-pex==0.4.4 --break-system-packages
+    python3 -m pip install klayout-vector-file-export-cli==0.5 --break-system-packages
+  elif [ "$(expr substr $UBUNTU_VERSION_ID 1 5)" == '26.04' ]; then
+    python3 -m pip install gdsfactory==9.51.0 --break-system-packages
+    python3 -m pip install gds2palace==0.5.2 --break-system-packages
+    python3 -m pip install gds_prepare_for_EM==1.2.0 --break-system-packages
+    python3 -m pip install kfactory==3.0.4 --break-system-packages
+    python3 -m pip install klayout-pex==0.4.4 --break-system-packages
+    python3 -m pip install klayout-vector-file-export-cli==0.5 --break-system-packages
+  else
+    echo "Your platform Ubuntu $UBUNTU_VERSION_ID is not supported."
+  fi
+elif [ "$(expr substr $(uname -s) 1 10)" == 'MINGW32_NT' ]; then
+  OS='Cygwin'
+  echo "Your platform ($(uname -a)) is not supported."
+  exit 1
+else
+  echo "Your platform ($(uname -a)) is not supported."
+  exit 1
+fi
+
+
+
+#### Fix Version
+rm -fr $SRC_DIR/$PDK/
+if [ "$(uname)" == 'Darwin' ]; then
+	OS='Mac'
+	cd "$SRC_DIR"
+	git clone https://github.com/ishi-kai/gf180mcuD.git -b $GF180D_H
+elif [ "$(expr substr $(uname -s) 1 5)" == 'Linux' ]; then
+	OS='Linux'
+	cd "$SRC_DIR"
+	git clone https://github.com/ishi-kai/gf180mcuD.git -b $GF180D_H
+elif [ "$(expr substr $(uname -s) 1 10)" == 'MINGW32_NT' ]; then
+	OS='Cygwin'
+	echo "Your platform ($(uname -a)) is not supported."
+	exit 1
+else
+	echo "Your platform ($(uname -a)) is not supported."
+	exit 1
+fi
+rm -fr $PDK_ROOT/$PDK/
+mkdir $PDK_ROOT/$PDK/
+cp -aR $SRC_DIR/$PDK/* $PDK_ROOT/$PDK/
+
+
+if [ "$(uname)" == 'Darwin' ]; then
+  OS='Mac'
+  brew install curl
+elif [ "$(expr substr $(uname -s) 1 5)" == 'Linux' ]; then
+  OS='Linux'
+  sudo apt install curl
+elif [ "$(expr substr $(uname -s) 1 10)" == 'MINGW32_NT' ]; then
+  OS='Cygwin'
+  echo "Your platform ($(uname -a)) is not supported."
+  exit 1
+else
+  echo "Your platform ($(uname -a)) is not supported."
+  exit 1
+fi
+
+# Copy various things
+# -------------------
+export PDK_ROOT=$PDK_ROOT
+export PDK=$PDK
+export STD_CELL_LIBRARY=$MY_STDCELL
+cp -f $PDK_ROOT/$PDK/libs.tech/xschem/xschemrc $HOME/.xschem
+cp -f $my_dir/gf180mcuD/libs.tech/xschem/xschem-menu $PDK_ROOT/$PDK/libs.tech/xschem/
+cp -f $PDK_ROOT/$PDK/libs.tech/magic/$PDK.magicrc $HOME/.magicrc
+#cp -rf $PDK_ROOT/$PDK/libs.tech/klayout/drc $HOME/.klayout/
+#cp -rf $PDK_ROOT/$PDK/libs.tech/klayout/lvs $HOME/.klayout/
+#cp -rf $PDK_ROOT/$PDK/libs.tech/klayout/pymacros $HOME/.klayout/
+cp -rf $PDK_ROOT/$PDK/libs.tech/klayout/tech $HOME/.klayout/
+cp -rf $PDK_ROOT/$PDK/libs.tech/klayout/tech $HOME/.klayout/
+cp -f $my_dir/gf180/tech/gf180mcu.lyp  $HOME/.klayout/tech/
+cp -f $PDK_ROOT/$PDK/libs.ref/gf180mcu_fd_io/gds/gf180mcu_fd_io.gds $HOME/.klayout/libraries/
+cp -f $PDK_ROOT/$PDK/libs.ref/gf180mcu_fd_io/gds/gf180mcu_ef_io.gds $HOME/.klayout/libraries/
+cp -f $PDK_ROOT/$PDK/libs.ref/gf180mcu_fd_sc_mcu7t5v0/gds/gf180mcu_fd_sc_mcu7t5v0.gds $HOME/.klayout/libraries/
+cp -f $PDK_ROOT/$PDK/libs.ref/gf180mcu_fd_sc_mcu9t5v0/gds/gf180mcu_fd_sc_mcu9t5v0.gds $HOME/.klayout/libraries/
+
+if [ ! -d "$HOME/.klayout/ruby/filler_generation/" ]; then
+  mkdir -p $HOME/.klayout/ruby/filler_generation/
+fi
+cp -f $TOOLS_ROOT/gf180mcu/$PDK/libs.tech/klayout/tech/drc/filler_generation/* $HOME/.klayout/ruby/filler_generation/
+
+cp -f $my_dir/gf180/klayoutrc $HOME/.klayout/
+# cp -f $my_dir/gf180/tech/macros/* $HOME/.klayout/tech/macros/
+cp -f $my_dir/gf180/cells/gf180mcu_as_sc_mcu7t3v3/gds/gf180mcu_as_sc_mcu7t3v3.gds $HOME/.klayout/libraries/
+cp -f $my_dir/gf180/cells/gf180mcu_ocd_io/gds/gf180mcu_ocd_io.gds $HOME/.klayout/libraries/
+
+
+# Fix paths in xschemrc to point to correct PDK directory
+# -------------------------------------------------------
+sed -i 's/models\/ngspice/$env(PDK)\/libs.tech\/ngspice/g' "$HOME/.xschem/xschemrc"
+# echo 'append XSCHEM_LIBRARY_PATH :${PDK_ROOT}/$env(PDK)/libs.tech/xschem' >> "$HOME/.xschem/xschemrc"
+echo 'set 180MCU_STDCELLS ${PDK_ROOT}/$env(PDK)/libs.ref/gf180mcu_fd_sc_mcu7t5v0/spice' >> "$HOME/.xschem/xschemrc"
+echo 'puts stderr "180MCU_STDCELLS: $180MCU_STDCELLS"' >> "$HOME/.xschem/xschemrc"
+
+
+# Finished
+# --------
+echo ""
+echo ">>>> All done."
+echo ""
