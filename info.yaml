@@ -9,7 +9,7 @@
 # ======================================================
 project:
   title: ""        # Project title
-  author: ""       # Your name
+  author: "ARI"       # Your name
   discord: ""      # Optional: Discord username (for support / communication)
   description: ""  # Short one-line description
 
@@ -17,9 +17,9 @@ project:
 # Layout (GDS) configuration
 # ======================================================
 gds:
-  # The top cell name is the DUT name "inv_dut_NNN".
-  # It is taken from the layout file name: src/inv_dut_NNN.gds
-  # (NNN = DUT_NUM in dut_params.csv)
+  # The top cell name is the DUT name "inv_dut_047".
+  # It is taken from the layout file name: src/inv_dut_047.gds
+  # (047 = DUT_NUM in dut_params.csv)
 
   # File extension of layout
   extension: "gds"
